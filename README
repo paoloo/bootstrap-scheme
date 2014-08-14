@@ -91,6 +91,16 @@ program-loaded
 "bad move"
 exiting
 $
+$ ./scheme
+Welcome to your Scheme REPL. Use ctrl-c to exit.
+> (let ( (s (sock-tcp "127.0.0.1" 9999)) ) (sock-send s "test 1 2 3") (write (sock-recv s)) (sock-close s) )
+"200 HELLO\n"ok
+> (<< 1 3)
+8
+> (>> 1024 2)
+256
+>
+
 
 ----
 

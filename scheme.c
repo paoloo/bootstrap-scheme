@@ -1,6 +1,7 @@
 /*
  * Bootstrap Scheme - a quick and very dirty Scheme interpreter.
  * Copyright (C) 2010 Peter Michaux (http://peter.michaux.ca/)
+ * CopyLeft  (X) 2014 Paolo Oliveira (http://paoloo.wordpress.com)
  *
  * This program is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public
@@ -19,7 +20,18 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <ctype.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <fcntl.h>
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <stdarg.h>
 
 /**************************** MODEL ******************************/
 
@@ -98,6 +110,12 @@ object *or_symbol;
 object *eof_object;
 object *the_empty_environment;
 object *the_global_environment;
+object *bsl_symbol;
+object *bsr_symbol;
+object *sockTCP_symbol;
+object *sockSEND_symbol;
+object *sockRECV_symbol;
+object *sockCLOSE_symbol;
 
 object *cons(object *car, object *cdr);
 object *car(object *pair);
@@ -346,7 +364,11 @@ object *add_proc(object *arguments) {
 object *sub_proc(object *arguments) {
     long result;
     
-    result = (car(arguments))->data.fixnum.value;
+    if (is_the_empty_list(cdr(arguments))) {
+        result = -(car(arguments))->data.fixnum.value;
+    } else {
+        result = (car(arguments))->data.fixnum.value;
+    }
     while (!is_the_empty_list(arguments = cdr(arguments))) {
         result -= (car(arguments))->data.fixnum.value;
     }
@@ -824,6 +846,53 @@ object *setup_environment(void) {
     return initial_env;
 }
 
+object *bsr_proc(object *arguments) {
+    return make_fixnum(
+        ((car(arguments) )->data.fixnum.value)>>
+        ((cadr(arguments))->data.fixnum.value));
+}
+
+object *bsl_proc(object *arguments) {
+    return make_fixnum(
+        ((car(arguments) )->data.fixnum.value)<<
+        ((cadr(arguments))->data.fixnum.value));
+}
+
+object *sock_tcp(object *arguments){
+    char *servidor = car(arguments)->data.string.value;
+    int porta = cadr(arguments)->data.fixnum.value;
+    int sockfd; struct sockaddr_in dest;
+    if( (sockfd = socket(AF_INET, SOCK_STREAM, 0))<0 ){ perror("Socket"); exit(-1); }
+    bzero(&dest, sizeof(dest));
+    dest.sin_family = AF_INET; dest.sin_port = htons(porta);
+    if( inet_aton(servidor, &dest.sin_addr.s_addr)==0 ){ perror("bloco"); exit(-1); }
+    if( connect(sockfd, (struct sockaddr*)&dest, sizeof(dest)) !=0 ){
+        perror("Connect"); exit(-1);
+    }
+    return make_fixnum(sockfd);
+}
+
+object *sock_send(object *arguments){
+    int s = car(arguments)->data.fixnum.value;
+    char *dado = cadr(arguments)->data.string.value;
+    send(s, dado, strlen(dado), 0);
+    return ok_symbol;
+}
+
+object *sock_recv(object *arguments){
+    int s = car(arguments)->data.fixnum.value;
+    char buffer[1024];
+    bzero(buffer, 1024);
+    recv(s, buffer, sizeof(buffer), 0);
+    return make_string(buffer);
+}
+
+object *sock_close(object *arguments){
+    int s = car(arguments)->data.fixnum.value;
+    close(s);
+    return ok_symbol;
+}
+
 void populate_environment(object *env) {
 
 #define add_procedure(scheme_name, c_name)              \
@@ -887,6 +956,14 @@ void populate_environment(object *env) {
     add_procedure("write-char"       , write_char_proc);
     add_procedure("write"            , write_proc);
 
+    add_procedure("<<"              , bsl_proc);
+    add_procedure(">>"              , bsr_proc);
+    add_procedure("sock-tcp"        , sock_tcp);
+    add_procedure("sock-send"       , sock_send);
+    add_procedure("sock-recv"       , sock_recv);
+    add_procedure("sock-close"      , sock_close);
+
+
     add_procedure("error", error_proc);
 }
 
@@ -923,6 +1000,13 @@ void init(void) {
     let_symbol = make_symbol("let");
     and_symbol = make_symbol("and");
     or_symbol = make_symbol("or");
+
+    bsl_symbol = make_symbol("<<");
+    bsr_symbol = make_symbol(">>");
+    sockTCP_symbol = make_symbol("sock-tcp");
+    sockSEND_symbol = make_symbol("sock-send");
+    sockRECV_symbol = make_symbol("sock-recv");
+    sockCLOSE_symbol = make_symbol("sock-close");
     
     eof_object = alloc_object();
     eof_object->type = EOF_OBJECT;

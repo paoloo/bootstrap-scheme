@@ -1,3 +1,13 @@
+0.21 - August 8, 2014 - Paolo Oliveira
+  - add bit-shifting directives
+    * >> ( bit-shift right )
+    * << ( bit-shift left )
+  - add socket operations
+    * sock-tcp
+    * sock-send
+    * sock-recv
+    * sock-close
+
 0.20 - January 24, 2010 - Peter Michaux
   - add I/O primitive procedures
     * load
